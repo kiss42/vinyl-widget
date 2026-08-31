@@ -18,7 +18,7 @@ no API key, no developer account, nothing to sign up for.
 You need **macOS 13 (Ventura) or newer** and the Spotify desktop app.
 
 ```bash
-git clone https://github.com/kisspierre42/vinyl-widget.git
+git clone https://github.com/kiss42/vinyl-widget.git
 cd vinyl-widget
 ./install.sh
 ```
