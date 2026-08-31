@@ -39,18 +39,21 @@ fi
 ./build.sh
 
 # 5. Install
-DEST="/Applications/VinylWidget.app"
-if [ -d "$DEST" ]; then
-    say "› replacing the copy in /Applications…"
+DEST="${INSTALL_DIR:-/Applications}/VinylWidget.app"
+
+# Stop any copy that's already running, wherever it was launched from — otherwise
+# macOS just re-activates that one instead of the freshly installed app.
+if pgrep -f "VinylWidget.app/Contents/MacOS/VinylWidget" >/dev/null 2>&1; then
+    say "› stopping the running copy…"
     pkill -f "VinylWidget.app/Contents/MacOS/VinylWidget" 2>/dev/null || true
     sleep 1
-    rm -rf "$DEST"
 fi
+[ -d "$DEST" ] && rm -rf "$DEST"
 cp -R VinylWidget.app "$DEST"
 xattr -dr com.apple.quarantine "$DEST" 2>/dev/null || true
 
 say ""
-say "✓ Installed to /Applications/VinylWidget.app"
+say "✓ Installed to $DEST"
 say ""
 say "  Launching it now. macOS will ask once for permission to control"
 say "  Spotify — click Allow, or the widget can't read what's playing."
