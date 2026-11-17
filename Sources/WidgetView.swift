@@ -151,7 +151,9 @@ struct WidgetView: View {
     @State private var spin: Double = 0
     @State private var spinStartedAt: TimeInterval?
 
-    private var theme: Theme { settings.theme }
+    private var theme: Theme {
+        settings.useArtworkColors ? (spotify.artworkTheme ?? settings.theme) : settings.theme
+    }
 
     var body: some View {
         VStack(spacing: baseGap) {
@@ -159,6 +161,7 @@ struct WidgetView: View {
             if settings.showPanel || settings.compactMode { panel }
         }
         .frame(width: baseCardW, height: settings.baseHeight)
+        .animation(.easeInOut(duration: 0.45), value: theme)
         .overlay(alignment: .bottomTrailing) {
             if interactive { resizeHandle }
         }

@@ -13,6 +13,7 @@ final class Settings: ObservableObject {
     @Published var showTonearm: Bool { didSet { persist() } }
     @Published var showPanel: Bool { didSet { persist() } }
     @Published var compactMode: Bool { didSet { persist() } }
+    @Published var useArtworkColors: Bool { didSet { persist() } }
 
     private enum Key {
         static let theme = "theme"
@@ -22,6 +23,7 @@ final class Settings: ObservableObject {
         static let arm = "showTonearm"
         static let panel = "showPanel"
         static let compact = "compactMode"
+        static let artworkColors = "useArtworkColors"
         static let launched = "hasLaunchedBefore"
     }
 
@@ -39,6 +41,7 @@ final class Settings: ObservableObject {
             Key.arm: true,
             Key.panel: true,
             Key.compact: false,
+            Key.artworkColors: false,
         ])
 
         isFirstRun = !defaults.bool(forKey: Key.launched)
@@ -56,6 +59,7 @@ final class Settings: ObservableObject {
         showTonearm = defaults.bool(forKey: Key.arm)
         showPanel = defaults.bool(forKey: Key.panel)
         compactMode = defaults.bool(forKey: Key.compact)
+        useArtworkColors = defaults.bool(forKey: Key.artworkColors)
         if scale < 0.6 || scale > 2.0 { scale = 1.0 }
         loading = false
     }
@@ -69,6 +73,7 @@ final class Settings: ObservableObject {
         defaults.set(showTonearm, forKey: Key.arm)
         defaults.set(showPanel, forKey: Key.panel)
         defaults.set(compactMode, forKey: Key.compact)
+        defaults.set(useArtworkColors, forKey: Key.artworkColors)
     }
 
     func resetToDefaults() {
@@ -78,6 +83,7 @@ final class Settings: ObservableObject {
         showTonearm = true
         showPanel = true
         compactMode = false
+        useArtworkColors = false
     }
 
     /// Widget size in points at the current scale.

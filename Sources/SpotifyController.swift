@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import ImageIO
 
 struct TrackState: Equatable {
     var running = false
@@ -22,6 +23,7 @@ struct TrackState: Equatable {
 final class SpotifyController: ObservableObject {
     @Published private(set) var state = TrackState()
     @Published private(set) var artwork: NSImage?
+    @Published private(set) var artworkTheme: Theme?
     /// True when Spotify is running but Apple Events are being refused (missing Automation permission).
     @Published private(set) var controlBlocked = false
     /// False when the Spotify app can't be found on this Mac at all.
@@ -108,6 +110,7 @@ final class SpotifyController: ObservableObject {
         guard spotifyIsRunning else {
             if state.running { state = TrackState() }
             artwork = nil
+            artworkTheme = nil
             loadedArtworkFor = ""
             lastSync = Date()
             return
@@ -153,13 +156,32 @@ final class SpotifyController: ObservableObject {
     }
 
     private func loadArtworkIfNeeded() {
-        let key = state.trackID.isEmpty ? state.artworkURL : state.trackID
-        guard !key.isEmpty, key != loadedArtworkFor,
-              let url = URL(string: state.artworkURL) else { return }
+        let key = state.artworkURL
+        guard key != loadedArtworkFor else { return }
         loadedArtworkFor = key
+        guard !key.isEmpty, let url = URL(string: key) else {
+            artwork = nil
+            artworkTheme = nil
+            return
+        }
+        artwork = nil
         URLSession.shared.dataTask(with: url) { [weak self] data, _, _ in
-            guard let data, let img = NSImage(data: data) else { return }
-            DispatchQueue.main.async { self?.artwork = img }
+            let image = data.flatMap { data in
+                CGImageSourceCreateWithData(data as CFData, nil)
+                    .flatMap { CGImageSourceCreateImageAtIndex($0, 0, nil) }
+            }
+            let palette = image.flatMap { ArtworkPalette.theme(for: $0) }
+            DispatchQueue.main.async {
+                guard let self, self.loadedArtworkFor == key else { return }
+                guard let image else {
+                    self.artworkTheme = nil
+                    self.loadedArtworkFor = "" // Retry a failed download on the next refresh.
+                    return
+                }
+                self.artwork = NSImage(cgImage: image,
+                                       size: NSSize(width: image.width, height: image.height))
+                self.artworkTheme = palette
+            }
         }.resume()
     }
 

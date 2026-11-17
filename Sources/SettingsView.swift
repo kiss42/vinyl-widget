@@ -60,10 +60,17 @@ struct SettingsView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
                 section("Theme") {
-                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 4),
-                              spacing: 10) {
-                        ForEach(Theme.presets, id: \.name) { preset in
-                            presetSwatch(preset)
+                    VStack(alignment: .leading, spacing: 12) {
+                        Toggle("Match album artwork", isOn: $settings.useArtworkColors)
+                            .toggleStyle(.checkbox)
+                        Text("Automatically adapts to each cover. Select a preset or edit a color to switch back to a manual theme.")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.secondary)
+                        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 4),
+                                  spacing: 10) {
+                            ForEach(Theme.presets, id: \.name) { preset in
+                                presetSwatch(preset)
+                            }
                         }
                     }
                 }
@@ -155,6 +162,7 @@ struct SettingsView: View {
             ColorPicker("", selection: Binding(
                 get: { Color(hex: settings.theme[keyPath: keyPath]) },
                 set: { newValue in
+                    settings.useArtworkColors = false
                     settings.theme[keyPath: keyPath] = newValue.hexString
                     if Theme.presets.contains(where: { $0.name == settings.theme.name }) {
                         settings.theme.name = "Custom"
@@ -165,8 +173,9 @@ struct SettingsView: View {
     }
 
     private func presetSwatch(_ preset: Theme) -> some View {
-        let selected = settings.theme == preset
+        let selected = !settings.useArtworkColors && settings.theme == preset
         return Button {
+            settings.useArtworkColors = false
             settings.theme = preset
         } label: {
             VStack(spacing: 5) {

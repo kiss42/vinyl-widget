@@ -59,6 +59,9 @@ the slider button in its corner).
 </p>
 
 * **8 built-in themes** — Studio, Midnight, Cream, Rose, Forest, Mono, Sunset, Ocean.
+* **Match album artwork** — optionally generate a matching palette on your Mac for each
+  cover. Selecting a preset or editing a color returns to the manual theme. If artwork
+  is unavailable, the manual theme is used. This is not Spotify's own color algorithm.
 * **Every colour is yours** — card, record, panel, buttons, accent, text, tonearm. Pick
   any colour and the widget updates live.
 * **Size** — 70% to 160%.
@@ -136,6 +139,13 @@ the wallpaper.
 ```bash
 ./build.sh        # universal binary (Apple Silicon + Intel), ad-hoc signed
 open VinylWidget.app
+```
+
+To check the artwork palette with synthetic covers:
+
+```bash
+swiftc -O Sources/Theme.swift Sources/ArtworkPalette.swift Tests/ArtworkPalette/main.swift -o /tmp/vinyl-artwork-palette-check
+/tmp/vinyl-artwork-palette-check
 ```
 
 Source layout:

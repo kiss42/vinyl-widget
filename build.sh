@@ -7,7 +7,7 @@ APP="VinylWidget.app"
 BIN="VinylWidget"
 BUNDLE_ID="io.github.vinylwidget"
 MIN_MACOS="13.0"
-SOURCES=(Sources/Theme.swift Sources/Settings.swift Sources/SpotifyController.swift
+SOURCES=(Sources/Theme.swift Sources/ArtworkPalette.swift Sources/Settings.swift Sources/SpotifyController.swift
          Sources/WidgetView.swift Sources/SettingsView.swift Sources/main.swift)
 
 if ! command -v swiftc >/dev/null 2>&1; then
