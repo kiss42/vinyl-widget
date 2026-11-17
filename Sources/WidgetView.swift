@@ -24,6 +24,62 @@ private extension Double {
     var clamped01: Double { Swift.min(Swift.max(self, 0), 1) }
 }
 
+// AppKit keeps the mouse-down view for the entire drag, even while the widget's
+// window changes size. Screen coordinates don't move as the window is resized.
+private struct ResizeHandleInput: NSViewRepresentable {
+    var scale: Double
+    var baseHeight: CGFloat
+    var onResize: (Double) -> Void
+
+    func makeNSView(context: Context) -> ResizeHandleView { ResizeHandleView() }
+
+    func updateNSView(_ view: ResizeHandleView, context: Context) {
+        view.scale = scale
+        view.baseHeight = baseHeight
+        view.onResize = onResize
+    }
+}
+
+private final class ResizeHandleView: NSView {
+    var scale: Double = 1
+    var baseHeight: CGFloat = basePanelH
+    var onResize: (Double) -> Void = { _ in }
+    private var startPoint = NSPoint.zero
+    private var startScale: Double = 1
+    private var startHeight: CGFloat = basePanelH
+
+    override var mouseDownCanMoveWindow: Bool { false }
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    private var resizeCursor: NSCursor {
+        if #available(macOS 15.0, *) {
+            return .frameResize(position: .bottomRight, directions: .all)
+        }
+        return .resizeLeftRight
+    }
+
+    override func resetCursorRects() {
+        super.resetCursorRects()
+        addCursorRect(bounds, cursor: resizeCursor)
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        startPoint = NSEvent.mouseLocation
+        startScale = scale
+        startHeight = baseHeight
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        let point = NSEvent.mouseLocation
+        let dx = point.x - startPoint.x
+        let dy = startPoint.y - point.y
+        // Project onto the widget's aspect-ratio diagonal, in screen points.
+        let delta = (dx * baseCardW + dy * startHeight)
+            / (baseCardW * baseCardW + startHeight * startHeight)
+        onResize(min(1.6, max(0.7, startScale + delta)))
+    }
+}
+
 // MARK: - Draggable bar
 
 private struct Bar: View {
@@ -32,21 +88,33 @@ private struct Bar: View {
     var tint: Color
     var onChange: (Double) -> Void
     var onCommit: (Double) -> Void
+    @State private var hovering = false
+    @State private var dragging = false
 
     var body: some View {
         GeometryReader { geo in
             let w = max(geo.size.width, 1)
+            let emphasized = hovering || dragging
+            let barHeight = emphasized ? min(height + 2, geo.size.height) : height
             ZStack(alignment: .leading) {
-                Capsule().fill(Color.white.opacity(0.16)).frame(height: height)
-                Capsule().fill(tint).frame(width: w * progress.clamped01, height: height)
+                Capsule().fill(Color.white.opacity(emphasized ? 0.28 : 0.16)).frame(height: barHeight)
+                Capsule().fill(tint).frame(width: w * progress.clamped01, height: barHeight)
+                if emphasized {
+                    Circle().fill(tint)
+                        .frame(width: 8, height: 8)
+                        .position(x: min(max(w * progress.clamped01, 4), max(w - 4, 4)),
+                                  y: geo.size.height / 2)
+                }
             }
             .frame(width: w, height: geo.size.height, alignment: .center)
             .contentShape(Rectangle())
             .gesture(
                 DragGesture(minimumDistance: 0)
-                    .onChanged { onChange(($0.location.x / w).clamped01) }
-                    .onEnded { onCommit(($0.location.x / w).clamped01) }
+                    .onChanged { dragging = true; onChange(($0.location.x / w).clamped01) }
+                    .onEnded { onCommit(($0.location.x / w).clamped01); dragging = false }
             )
+            .onHover { hovering = $0 }
+            .animation(.easeOut(duration: 0.12), value: emphasized)
         }
     }
 }
@@ -59,7 +127,7 @@ struct WidgetRoot: View {
     var interactive: Bool = true
     var onSettings: () -> Void = {}
 
-    private var baseH: CGFloat { settings.showPanel ? baseTotalH : basePlatterH }
+    private var baseH: CGFloat { settings.baseHeight }
 
     var body: some View {
         WidgetView(settings: settings, spotify: spotify,
@@ -81,40 +149,75 @@ struct WidgetView: View {
     @State private var hovering = false
     @State private var dragProgress: Double? = nil
     @State private var spin: Double = 0
+    @State private var spinStartedAt: TimeInterval?
 
-    private let ticker = Timer.publish(every: 1.0 / 24.0, on: .main, in: .common).autoconnect()
-
-    private var theme: Theme { settings.theme }
+    private var theme: Theme {
+        settings.useArtworkColors ? (spotify.artworkTheme ?? settings.theme) : settings.theme
+    }
 
     var body: some View {
         VStack(spacing: baseGap) {
-            platter
-            if settings.showPanel { panel }
+            if !settings.compactMode { platter }
+            if settings.showPanel || settings.compactMode { panel }
         }
-        .frame(width: baseCardW, height: settings.showPanel ? baseTotalH : basePlatterH)
+        .frame(width: baseCardW, height: settings.baseHeight)
+        .animation(.easeInOut(duration: 0.45), value: theme)
+        .overlay(alignment: .bottomTrailing) {
+            if interactive { resizeHandle }
+        }
         .onHover { h in
             guard interactive else { return }
             withAnimation(.easeOut(duration: 0.15)) { hovering = h }
         }
-        .onReceive(ticker) { _ in
-            // 33 1/3 rpm = 200 degrees per second
-            if spotify.state.playing && settings.spinRecord {
-                spin = (spin + 200.0 / 24.0).truncatingRemainder(dividingBy: 360)
-            }
-        }
+        .onAppear { updateSpinState() }
+        .onChange(of: spotify.state.playing) { _ in updateSpinState() }
+        .onChange(of: settings.spinRecord) { _ in updateSpinState() }
         .allowsHitTesting(interactive)
         .contextMenu {
             Button("Customize…") { onSettings() }
+            Button(settings.compactMode ? "Show Turntable" : "Compact Mode") {
+                settings.compactMode.toggle()
+            }
             Button("Open Spotify") { spotify.activateSpotify() }
             Divider()
             Button("Quit Vinyl Widget") { NSApp.terminate(nil) }
         }
     }
 
+    private func updateSpinState() {
+        let now = ProcessInfo.processInfo.systemUptime
+        if let started = spinStartedAt {
+            spin = (spin + (now - started) * 200).truncatingRemainder(dividingBy: 360)
+        }
+        spinStartedAt = spotify.state.playing && settings.spinRecord ? now : nil
+    }
+
+    private var spinAngle: Double {
+        guard let started = spinStartedAt else { return spin }
+        return (spin + (ProcessInfo.processInfo.systemUptime - started) * 200)
+            .truncatingRemainder(dividingBy: 360)
+    }
+
     private var progress: Double {
         if let d = dragProgress { return d }
         guard spotify.state.duration > 0 else { return 0 }
         return (spotify.state.position / spotify.state.duration).clamped01
+    }
+
+    private var resizeHandle: some View {
+        ZStack {
+            Image(systemName: "arrow.up.left.and.arrow.down.right")
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(theme.textColor.opacity(0.7))
+                .allowsHitTesting(false)
+            ResizeHandleInput(scale: settings.scale, baseHeight: settings.baseHeight) {
+                settings.scale = $0
+            }
+        }
+            .frame(width: 20, height: 20)
+            .padding([.bottom, .trailing], 6)
+            .accessibilityLabel("Drag to resize widget")
+            .help("Drag to resize")
     }
 
     // MARK: Turntable
@@ -128,15 +231,15 @@ struct WidgetView: View {
                     RoundedRectangle(cornerRadius: 30, style: .continuous)
                         .strokeBorder(Color.white.opacity(0.22), lineWidth: 1)
                 )
-                .shadow(color: .black.opacity(0.45), radius: 14, y: 6)
-
             vinyl.position(recordCenter)
 
             if settings.showTonearm { tonearm }
 
-            if hovering { gearButton }
         }
         .frame(width: baseCardW, height: basePlatterH)
+        .overlay(alignment: .topLeading) {
+            if hovering { gearButton.padding(9) }
+        }
     }
 
     private var vinyl: some View {
@@ -162,27 +265,33 @@ struct WidgetView: View {
                 .frame(width: recordRadius * 2, height: recordRadius * 2)
                 .blendMode(.plusLighter)
 
-            Group {
-                if let art = spotify.artwork {
-                    Image(nsImage: art).resizable().aspectRatio(contentMode: .fill)
-                } else {
-                    ZStack {
-                        Circle().fill(theme.knobColor)
-                        Image(systemName: "music.note")
-                            .font(.system(size: 20, weight: .light))
-                            .foregroundStyle(theme.textColor.opacity(0.55))
+            TimelineView(.animation(minimumInterval: 1.0 / 60.0,
+                                    paused: !spotify.state.playing || !settings.spinRecord)) { _ in
+                Group {
+                    if let art = spotify.artwork {
+                        Image(nsImage: art).resizable().aspectRatio(contentMode: .fill)
+                    } else {
+                        ZStack {
+                            Circle().fill(theme.knobColor)
+                            Image(systemName: "music.note")
+                                .font(.system(size: 20, weight: .light))
+                                .foregroundStyle(theme.textColor.opacity(0.55))
+                        }
                     }
                 }
+                .frame(width: labelRadius * 2, height: labelRadius * 2)
+                .clipShape(Circle())
+                .overlay(Circle().strokeBorder(Color.black.opacity(0.35), lineWidth: 1))
+                // The light and record shadow stay still; only the label rotates.
+                // Negate for NSHostingView's y-up coordinate space.
+                .rotationEffect(.degrees(-spinAngle))
             }
             .frame(width: labelRadius * 2, height: labelRadius * 2)
-            .clipShape(Circle())
-            .overlay(Circle().strokeBorder(Color.black.opacity(0.35), lineWidth: 1))
 
             Circle().fill(theme.armColor.opacity(0.8)).frame(width: 7, height: 7)
             Circle().fill(Color.black.opacity(0.85)).frame(width: 4, height: 4)
         }
         .frame(width: recordRadius * 2, height: recordRadius * 2)
-        .rotationEffect(.degrees(-spin))   // negated: the hosting view's space is y-up
         .onTapGesture { spotify.playPause() }
     }
 
@@ -256,7 +365,7 @@ struct WidgetView: View {
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(theme.textColor)
                 .lineLimit(1).truncationMode(.tail)
-                .frame(width: baseCardW - 36, height: 19, alignment: .leading)
+                .frame(width: baseCardW - 64, height: 19, alignment: .leading)
 
             Text(subhead)
                 .font(.system(size: 11))
@@ -289,8 +398,22 @@ struct WidgetView: View {
                     RoundedRectangle(cornerRadius: 26, style: .continuous)
                         .strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
                 )
-                .shadow(color: .black.opacity(0.45), radius: 14, y: 6)
         )
+        .overlay(alignment: .topTrailing) {
+            if hovering {
+                Button { settings.compactMode.toggle() } label: {
+                    Image(systemName: settings.compactMode ? "arrow.up.left.and.arrow.down.right" : "arrow.down.right.and.arrow.up.left")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(theme.textColor.opacity(0.8))
+                        .frame(width: 22, height: 22)
+                        .background(Circle().fill(theme.knobColor.opacity(0.8)))
+                }
+                .buttonStyle(KnobButtonStyle())
+                .help(settings.compactMode ? "Show turntable" : "Compact mode")
+                .padding(.top, 9)
+                .padding(.trailing, 10)
+            }
+        }
         .contentShape(Rectangle())
         .onTapGesture { headlineTapped() }
     }
@@ -326,26 +449,30 @@ struct WidgetView: View {
             .shadow(color: .black.opacity(0.5), radius: 3, y: 2)
             .contentShape(Circle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(KnobButtonStyle())
     }
 
     private var gearButton: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 0) {
-                Button(action: onSettings) {
-                    Image(systemName: "slider.horizontal.3")
-                        .font(.system(size: 9, weight: .bold))
-                        .foregroundStyle(Color.white.opacity(0.9))
-                        .frame(width: 19, height: 19)
-                        .background(Circle().fill(Color.black.opacity(0.45)))
-                }
-                .buttonStyle(.plain)
-                .help("Customize the widget")
-                Spacer(minLength: 0)
-            }
-            Spacer(minLength: 0)
+        Button(action: onSettings) {
+            Image(systemName: "slider.horizontal.3")
+                .font(.system(size: 9, weight: .bold))
+                .foregroundStyle(Color.white.opacity(0.9))
+                .frame(width: 19, height: 19)
+                .background(Circle().fill(Color.black.opacity(0.45)))
         }
-        .frame(width: baseCardW, height: basePlatterH)
-        .padding(9)
+        .buttonStyle(KnobButtonStyle())
+        .help("Customize the widget")
+    }
+}
+
+private struct KnobButtonStyle: ButtonStyle {
+    @State private var hovering = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .overlay(Circle().fill(Color.white.opacity(configuration.isPressed ? 0.26 : (hovering ? 0.14 : 0))))
+            .animation(.easeOut(duration: 0.12), value: hovering)
+            .animation(.easeOut(duration: 0.08), value: configuration.isPressed)
+            .onHover { hovering = $0 }
     }
 }

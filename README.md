@@ -59,6 +59,9 @@ the slider button in its corner).
 </p>
 
 * **8 built-in themes** — Studio, Midnight, Cream, Rose, Forest, Mono, Sunset, Ocean.
+* **Match album artwork** — optionally generate a matching palette on your Mac for each
+  cover. Selecting a preset or editing a color returns to the manual theme. If artwork
+  is unavailable, the manual theme is used. This is not Spotify's own color algorithm.
 * **Every colour is yours** — card, record, panel, buttons, accent, text, tonearm. Pick
   any colour and the widget updates live.
 * **Size** — 70% to 160%.
@@ -66,6 +69,9 @@ the slider button in its corner).
   desktop. Turn it off and it floats on top instead.
 * **Spin, tonearm, control panel** — turn any of them off. Panel off leaves just the
   record.
+* **Compact mode** — show only the playback controls. Use the button at the top right
+  of the panel (visible on hover), the right-click menu, or the menu bar to switch
+  between compact and full views.
 * **Open at login.**
 
 Themes are stored as plain hex in your preferences, so anything you build is easy to
@@ -79,7 +85,10 @@ share — copy the values out of `Sources/Theme.swift` to add your own preset.
 | --- | --- |
 | Click the record | play / pause |
 | Drag the widget | move it (position is remembered) |
+| Drag the bottom-right handle diagonally | resize the widget (the cursor changes over the handle) |
 | Drag the thin bar | seek within the track |
+| Hover over the progress bar or a control | show interactive feedback |
+| Hover over the control panel and click its top-right button | toggle compact mode |
 | Knobs | previous, play/pause, next, shuffle |
 | Right-click | Customize, Open Spotify, Quit |
 | Hover | reveals the customize button |
@@ -130,6 +139,13 @@ the wallpaper.
 ```bash
 ./build.sh        # universal binary (Apple Silicon + Intel), ad-hoc signed
 open VinylWidget.app
+```
+
+To check the artwork palette with synthetic covers:
+
+```bash
+swiftc -O Sources/Theme.swift Sources/ArtworkPalette.swift Tests/ArtworkPalette/main.swift -o /tmp/vinyl-artwork-palette-check
+/tmp/vinyl-artwork-palette-check
 ```
 
 Source layout:
