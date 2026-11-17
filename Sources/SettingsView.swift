@@ -37,7 +37,7 @@ struct SettingsView: View {
             WidgetRoot(settings: settings, spotify: spotify, interactive: false)
                 .scaleEffect(0.78 / max(settings.scale, 0.01))
                 .frame(width: baseCardW * 0.78,
-                       height: (settings.showPanel ? baseTotalH : basePlatterH) * 0.78)
+                       height: settings.baseHeight * 0.78)
 
             Spacer(minLength: 0)
 
@@ -102,6 +102,8 @@ struct SettingsView: View {
                         Toggle("Spin the record while playing", isOn: $settings.spinRecord)
                         Toggle("Show the tonearm", isOn: $settings.showTonearm)
                         Toggle("Show the control panel", isOn: $settings.showPanel)
+                            .disabled(settings.compactMode)
+                        Toggle("Compact mode (controls only)", isOn: $settings.compactMode)
 
                         Toggle("Open at login", isOn: Binding(
                             get: { loginAtStart },

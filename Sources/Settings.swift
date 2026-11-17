@@ -10,6 +10,7 @@ final class Settings: ObservableObject {
     @Published var spinRecord: Bool { didSet { persist() } }
     @Published var showTonearm: Bool { didSet { persist() } }
     @Published var showPanel: Bool { didSet { persist() } }
+    @Published var compactMode: Bool { didSet { persist() } }
 
     private enum Key {
         static let theme = "theme"
@@ -18,6 +19,7 @@ final class Settings: ObservableObject {
         static let spin = "spinRecord"
         static let arm = "showTonearm"
         static let panel = "showPanel"
+        static let compact = "compactMode"
         static let launched = "hasLaunchedBefore"
     }
 
@@ -34,6 +36,7 @@ final class Settings: ObservableObject {
             Key.spin: true,
             Key.arm: true,
             Key.panel: true,
+            Key.compact: false,
         ])
 
         isFirstRun = !defaults.bool(forKey: Key.launched)
@@ -50,6 +53,7 @@ final class Settings: ObservableObject {
         spinRecord = defaults.bool(forKey: Key.spin)
         showTonearm = defaults.bool(forKey: Key.arm)
         showPanel = defaults.bool(forKey: Key.panel)
+        compactMode = defaults.bool(forKey: Key.compact)
         if scale < 0.6 || scale > 2.0 { scale = 1.0 }
         loading = false
     }
@@ -62,6 +66,7 @@ final class Settings: ObservableObject {
         defaults.set(spinRecord, forKey: Key.spin)
         defaults.set(showTonearm, forKey: Key.arm)
         defaults.set(showPanel, forKey: Key.panel)
+        defaults.set(compactMode, forKey: Key.compact)
     }
 
     func resetToDefaults() {
@@ -70,11 +75,16 @@ final class Settings: ObservableObject {
         spinRecord = true
         showTonearm = true
         showPanel = true
+        compactMode = false
     }
 
     /// Widget size in points at the current scale.
+    var baseHeight: CGFloat {
+        compactMode ? basePanelH : (showPanel ? baseTotalH : basePlatterH)
+    }
+
     var widgetSize: CGSize {
         CGSize(width: baseCardW * scale,
-               height: (showPanel ? baseTotalH : basePlatterH) * scale)
+               height: baseHeight * scale)
     }
 }

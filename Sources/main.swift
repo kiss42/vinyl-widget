@@ -138,6 +138,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let menu = NSMenu()
         menu.addItem(NSMenuItem(title: "Customize…", action: #selector(openSettings), keyEquivalent: ","))
         menu.addItem(NSMenuItem(title: "Sit on Wallpaper", action: #selector(togglePinned), keyEquivalent: ""))
+        menu.addItem(NSMenuItem(title: "Compact Mode", action: #selector(toggleCompact), keyEquivalent: ""))
         menu.addItem(NSMenuItem(title: "Show / Hide Widget", action: #selector(toggleWidget), keyEquivalent: "w"))
         menu.addItem(NSMenuItem(title: "Reset Position", action: #selector(resetPosition), keyEquivalent: ""))
         menu.addItem(.separator())
@@ -149,6 +150,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     @objc private func togglePinned() { settings.pinnedToDesktop.toggle() }
+
+    @objc private func toggleCompact() { settings.compactMode.toggle() }
 
     @objc private func toggleWidget() {
         if panel.isVisible { panel.orderOut(nil) } else { panel.orderFrontRegardless() }
@@ -167,6 +170,8 @@ extension AppDelegate: NSMenuDelegate {
     func menuWillOpen(_ menu: NSMenu) {
         menu.items.first(where: { $0.title == "Sit on Wallpaper" })?.state =
             settings.pinnedToDesktop ? .on : .off
+        menu.items.first(where: { $0.title == "Compact Mode" })?.state =
+            settings.compactMode ? .on : .off
     }
 }
 
