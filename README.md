@@ -82,7 +82,7 @@ share — copy the values out of `Sources/Theme.swift` to add your own preset.
 | --- | --- |
 | Click the record | play / pause |
 | Drag the widget | move it (position is remembered) |
-| Drag the bottom-right handle | resize the widget |
+| Drag the bottom-right handle diagonally | resize the widget (the cursor changes over the handle) |
 | Drag the thin bar | seek within the track |
 | Hover over the progress bar or a control | show interactive feedback |
 | Hover over the control panel and click its top-right button | toggle compact mode |

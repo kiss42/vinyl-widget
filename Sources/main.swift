@@ -43,7 +43,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         panel.isFloatingPanel = true
         panel.backgroundColor = .clear
         panel.isOpaque = false
-        panel.hasShadow = false            // the cards draw their own shadows
+        panel.hasShadow = false
         panel.isMovableByWindowBackground = true
         panel.hidesOnDeactivate = false
         panel.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle, .fullScreenAuxiliary]
@@ -66,9 +66,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         if panel.frame.size != new {
             // grow downward from the current top-left corner
             let top = panel.frame.maxY
-            panel.setContentSize(new)
-            panel.setFrameOrigin(NSPoint(x: panel.frame.origin.x, y: top - new.height))
-            panel.contentView?.frame = NSRect(origin: .zero, size: new)
+            panel.setFrame(NSRect(x: panel.frame.origin.x, y: top - new.height,
+                                  width: new.width, height: new.height),
+                           display: true, animate: false)
             saveOrigin()
         }
         panel.orderFrontRegardless()

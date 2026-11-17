@@ -5,7 +5,9 @@ import Combine
 @MainActor
 final class Settings: ObservableObject {
     @Published var theme: Theme { didSet { persist() } }
-    @Published var scale: Double { didSet { persist() } }
+    @Published var scale: Double {
+        didSet { if !loading { defaults.set(scale, forKey: Key.scale) } }
+    }
     @Published var pinnedToDesktop: Bool { didSet { persist() } }
     @Published var spinRecord: Bool { didSet { persist() } }
     @Published var showTonearm: Bool { didSet { persist() } }

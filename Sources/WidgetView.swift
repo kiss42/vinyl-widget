@@ -24,6 +24,62 @@ private extension Double {
     var clamped01: Double { Swift.min(Swift.max(self, 0), 1) }
 }
 
+// AppKit keeps the mouse-down view for the entire drag, even while the widget's
+// window changes size. Screen coordinates don't move as the window is resized.
+private struct ResizeHandleInput: NSViewRepresentable {
+    var scale: Double
+    var baseHeight: CGFloat
+    var onResize: (Double) -> Void
+
+    func makeNSView(context: Context) -> ResizeHandleView { ResizeHandleView() }
+
+    func updateNSView(_ view: ResizeHandleView, context: Context) {
+        view.scale = scale
+        view.baseHeight = baseHeight
+        view.onResize = onResize
+    }
+}
+
+private final class ResizeHandleView: NSView {
+    var scale: Double = 1
+    var baseHeight: CGFloat = basePanelH
+    var onResize: (Double) -> Void = { _ in }
+    private var startPoint = NSPoint.zero
+    private var startScale: Double = 1
+    private var startHeight: CGFloat = basePanelH
+
+    override var mouseDownCanMoveWindow: Bool { false }
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    private var resizeCursor: NSCursor {
+        if #available(macOS 15.0, *) {
+            return .frameResize(position: .bottomRight, directions: .all)
+        }
+        return .resizeLeftRight
+    }
+
+    override func resetCursorRects() {
+        super.resetCursorRects()
+        addCursorRect(bounds, cursor: resizeCursor)
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        startPoint = NSEvent.mouseLocation
+        startScale = scale
+        startHeight = baseHeight
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        let point = NSEvent.mouseLocation
+        let dx = point.x - startPoint.x
+        let dy = startPoint.y - point.y
+        // Project onto the widget's aspect-ratio diagonal, in screen points.
+        let delta = (dx * baseCardW + dy * startHeight)
+            / (baseCardW * baseCardW + startHeight * startHeight)
+        onResize(min(1.6, max(0.7, startScale + delta)))
+    }
+}
+
 // MARK: - Draggable bar
 
 private struct Bar: View {
@@ -94,7 +150,6 @@ struct WidgetView: View {
     @State private var dragProgress: Double? = nil
     @State private var spin: Double = 0
     @State private var spinStartedAt: TimeInterval?
-    @State private var resizeStartScale: Double?
 
     private var theme: Theme { settings.theme }
 
@@ -147,19 +202,18 @@ struct WidgetView: View {
     }
 
     private var resizeHandle: some View {
-        Image(systemName: "arrow.up.left.and.arrow.down.right")
-            .font(.system(size: 9, weight: .semibold))
-            .foregroundStyle(theme.textColor.opacity(0.7))
+        ZStack {
+            Image(systemName: "arrow.up.left.and.arrow.down.right")
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(theme.textColor.opacity(0.7))
+                .allowsHitTesting(false)
+            ResizeHandleInput(scale: settings.scale, baseHeight: settings.baseHeight) {
+                settings.scale = $0
+            }
+        }
             .frame(width: 20, height: 20)
-            .contentShape(Rectangle())
+            .padding([.bottom, .trailing], 6)
             .accessibilityLabel("Drag to resize widget")
-            .gesture(DragGesture(minimumDistance: 0, coordinateSpace: .global)
-                .onChanged { value in
-                    if resizeStartScale == nil { resizeStartScale = settings.scale }
-                    guard let start = resizeStartScale else { return }
-                    settings.scale = min(1.6, max(0.7, start + value.translation.width / baseCardW))
-                }
-                .onEnded { _ in resizeStartScale = nil })
             .help("Drag to resize")
     }
 
